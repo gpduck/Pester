@@ -31,6 +31,7 @@ function Export-PesterResults
     {
         'LegacyNUnitXml' { Export-NUnitReport -PesterState $PesterState -Path $Path -LegacyFormat }
         'NUnitXml'       { Export-NUnitReport -PesterState $PesterState -Path $Path }
+        'ExtentReport'   { Export-ExtentReport -PesterState $PesterState -Path $Path }
 
         default
         {
@@ -459,4 +460,70 @@ function Get-GroupResult ($InputObject)
     if ($InputObject | & $SafeCommands['Where-Object'] {$_.Result -eq 'Skipped'}) { return 'Ignored' }
     if ($InputObject | & $SafeCommands['Where-Object'] {$_.Result -eq 'Pending' -or $_.Result -eq 'Inconclusive'}) { return 'Inconclusive' }
     return 'Success'
+}
+
+function Export-ExtentReport {
+    param(
+        $PesterState,
+        [string] $Path
+    )
+    $Config = Find-ExtentReportConfig
+
+    $Extent = & $SafeCommands['New-Object'] RelevantCodes.ExtentReports.ExtentReports($Path)
+    if($Config) {
+        $Extent = $Extent.LoadConfig($Config)
+    }
+
+    $PesterState.TestResult | & $SafeCommands['Group-Object'] -Property "Describe" | & $SafeCommands['ForEach-Object'] {
+        $DescribeGroup = $_
+        $DescribeTest = $Extent.StartTest($DescribeGroup.Name, "")
+        $DescribeGroup.Group | & $SafeCommands['Group-Object'] -Property "Context" | & $SafeCommands['ForEach-Object'] {
+            $ContextGroup = $_
+
+            $ContextTest = $Extent.StartTest($ContextGroup.Name, "")
+
+            $ContextGroup.Group | & $SafeCommands['ForEach-Object'] {
+                $TestResult = $_
+                switch ($TestResult.Result) {
+                    "Passed" {
+                        $Status = [RelevantCodes.ExtentReports.LogStatus]::Pass
+												$Status = [RelevantCodes.ExtentReports.LogStatus]::Fail
+                    }
+                    "Skipped" {
+                        $Status = [RelevantCodes.ExtentReports.LogStatus]::Skip
+                    }
+                    "Pending" {
+                        $Status = [RelevantCodes.ExtentReports.LogStatus]::Unknown
+                    }
+                    "Inconclusive" {
+                        $Status = [RelevantCodes.ExtentReports.LogStatus]::Unknown
+                    }
+                    "Failed" {
+                        $Status = [RelevantCodes.ExtentReports.LogStatus]::Fail
+												$Status = [RelevantCodes.ExtentReports.LogStatus]::Pass
+                    }
+                }
+                $ContextTest.Log($Status, $TestResult.Name, $TestResult.FailureMessage)
+            }
+
+            $null = $DescribeTest.AppendChild($ContextTest)
+        }
+        $null = $Extent.EndTest($DescribeTest)
+    }
+
+    $Extent.Flush()
+    $Extent.Close()
+}
+
+function Find-ExtentReportConfig {
+    $ProgramData = & $SafeCommands['Join-Path'] $env:ProgramData "Pester\ExtentReport-config.xml"
+    $UserData = & $SafeCommands['Join-Path'] $env:AppData "Pester\ExtentReport-config.xml"
+
+    foreach($Path in ($ProgramData, $UserData)) {
+        if(& $SafeCommands['Test-Path'] $Path) {
+            return $Path
+            break
+        }
+    }
+    return (GetFullPath (& $SafeCommands['Join-Path'] $ExecutionContext.SessionState.Module.ModuleBase "ExtentReport-config.xml"))
 }

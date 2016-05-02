@@ -9,11 +9,18 @@ properties {
 }
 
 Task default -depends Test, Build
-Task Build -depends Package
+Task Build -depends CopyLibraries,Package
 Task Package -depends Version-Module, Pack-Nuget, Unversion-Module
 Task Release -depends Build, Push-Nuget
 
-Task Test {
+Task CopyLibraries {
+	if(-not (Test-Path "$baseDir\bin\ExtentReports")) {
+		mkdir "$baseDir\bin\ExtentReports"
+	}
+	copy "$baseDir\vendor\packages\ExtentReports.*\lib\*.*" "$baseDir\bin\ExtentReports\"
+}
+
+Task Test -depends CopyLibraries {
     Set-Location "$baseDir"
     exec {."$baseDir\bin\Pester.bat"}
     Set-Location $currentDir

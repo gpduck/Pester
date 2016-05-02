@@ -1,3 +1,4 @@
 build/
 Test.xml
 vendor/packages/
+bin/ExtentReports

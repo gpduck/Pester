@@ -258,7 +258,7 @@ New-PesterOption
         [string] $OutputFile,
 
         [Parameter(Mandatory = $true, ParameterSetName = 'NewOutputSet')]
-        [ValidateSet('LegacyNUnitXml', 'NUnitXml')]
+        [ValidateSet('LegacyNUnitXml', 'NUnitXml', 'ExtentReport')]
         [string] $OutputFormat,
 
         [Switch]$Quiet,
